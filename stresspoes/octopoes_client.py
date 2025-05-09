@@ -292,7 +292,7 @@ class OctopoesClient:
 
         return res.json()
 
-    def save_many_declerations(
+    def save_many_declarations(
         self, origins: list[dict[str, Any]], valid_time: datetime.datetime | None = None
     ) -> JsonValue:
         for origin in origins:
@@ -364,5 +364,10 @@ class OctopoesClient:
 
     def node_delete(self, organisation: str) -> JsonValue:
         res = self._root.delete(f"{organisation}/node")
+
+        return res.json()
+
+    def bits_recalculate(self) -> JsonValue:
+        res = self._client.post("bits/recalculate")
 
         return res.json()
