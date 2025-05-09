@@ -111,37 +111,36 @@ def stress(ctx: click.Context, filename: str, dump: bool):
     counter = 0
     omp = datamap["observations_mapping"]
     amp = datamap["affirmations_list"]
-    while new_objects:
-        for _ in range(0xFF):
-            for obj in new_objects:
-                if obj["primary_key"] in omp:
-                    origin = omp[obj["primary_key"]]["origin"]
-                    origin["result"] = list(omp[obj["primary_key"]]["result_oois"].values())
-                    res = noc.save_observation(origin)
-                    if res is not None:
-                        print(
-                            f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
-                        )
-                if obj["primary_key"] in amp:
-                    res = noc.save_affirmations({"ooi": amp[obj["primary_key"]]})
-                    if res is not None:
-                        print(json.dumps(amp[obj["primary_key"]], indent=2))
-                        print(
-                            f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
-                        )
-            # noc.bits_recalculate()
-            newer_objects = noc.objects()["items"]
-            new_objects = [obj for obj in newer_objects if obj not in objects]
-            objects = newer_objects
-            print(f"{counter}: {len(objects)}")
-            counter += 1
+    while new_objects or counter < 0xFF:
+        if not new_objects:
+            new_objects = objects
+        for obj in new_objects:
+            if obj["primary_key"] in omp:
+                origin = omp[obj["primary_key"]]["origin"]
+                origin["result"] = list(omp[obj["primary_key"]]["result_oois"].values())
+                res = noc.save_observation(origin)
+                if res is not None:
+                    print(
+                        f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                    )
+            if obj["primary_key"] in amp:
+                res = noc.save_affirmations({"ooi": amp[obj["primary_key"]]})
+                if res is not None:
+                    print(json.dumps(amp[obj["primary_key"]], indent=2))
+                    print(
+                        f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                    )
+        # noc.bits_recalculate()
+        newer_objects = noc.objects()["items"]
+        new_objects = [obj for obj in newer_objects if obj not in objects]
+        objects = newer_objects
+        print(f"{counter}: {len(objects)}")
+        counter += 1
     if len(datamap["objects"]["items"]) == len(objects):
         print(f"GOOOD {len(datamap["objects"]["items"])}")
         noc.node_delete(organisation)
     else:
-        print(
-            f"bleet: {len(datamap["objects"]["items"])} != {len(objects)}"
-        )
+        print(f"bleet: {len(datamap["objects"]["items"])} != {len(objects)}")
         if dump:
             for obj in datamap["objects"]["items"]:
                 if obj not in objects:
