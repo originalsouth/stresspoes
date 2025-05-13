@@ -417,7 +417,7 @@ class OctopoesClient:
         return res.json()
 
     def scan_profiles_inheritance(
-        self, reference: string, valid_time: datetime.datetime | None = None
+        self, reference: str, valid_time: datetime.datetime | None = None
     ) -> JsonValue:
         params = {
             "reference": reference,
