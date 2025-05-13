@@ -372,6 +372,19 @@ class OctopoesClient:
 
         return res.json()
 
+    def scan_profile(
+        self, scan_profile_type: str | None, valid_time: datetime.datetime | None = None
+    ) -> JsonValue:
+        params = {
+            "scan_profile_type": scan_profile_type,
+            "valid_time": self._gettime(valid_time),
+        }
+        params = {k: v for k, v in params.items() if v is not None}
+
+        res = self._client.get("/scan_profiles", params=params)
+
+        return res.json()
+
     def save_scan_profile(
         self, scan_profile: dict[str, Any], valid_time: datetime.datetime | None = None
     ) -> JsonValue:
@@ -398,6 +411,18 @@ class OctopoesClient:
         self, valid_time: datetime.datetime | None = None
     ) -> JsonValue:
         params = {"valid_time": self._gettime(valid_time)}
+
+        res = self._client.get("/scan_profiles/recalculate", params=params)
+
+        return res.json()
+
+    def scan_profiles_inheritance(
+        self, reference: string, valid_time: datetime.datetime | None = None
+    ) -> JsonValue:
+        params = {
+            "reference": reference,
+            "valid_time": self._gettime(valid_time),
+        }
 
         res = self._client.get("/scan_profiles/recalculate", params=params)
 

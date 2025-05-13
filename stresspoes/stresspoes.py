@@ -12,6 +12,8 @@ from octopoes_client import OctopoesClient
 from term_image.image import from_file
 from xxhash import xxh3_128_hexdigest as xxh3
 
+MAGIC = 0xC0DECA7
+
 
 @click.group(
     context_settings={
@@ -54,7 +56,7 @@ def datamap(ctx: click.Context, filename: str):
     with open(filename, "wb") as file:
         payload = dumps(datamap)
         file.write(
-            zstd.ZstdCompressor().compress(dumps((0xC0DECA7, payload, xxh3(payload))))
+            zstd.ZstdCompressor().compress(dumps((MAGIC, payload, xxh3(payload))))
         )
 
 
@@ -77,7 +79,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
         magic, datamap, checksum = loads(
             zstd.ZstdDecompressor().decompress(file.read())
         )
-    if magic != 0xC0DECA7 or checksum != xxh3(datamap):
+    if magic != MAGIC or checksum != xxh3(datamap):
         click.echo(f"Datamap file {filename} seems corrupted.")
         return
     else:
@@ -99,7 +101,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
         [{"ooi": datamap["oois"][decl["source"]]} for decl in datamap["declarations"]]
     )
     if res is not None:
-        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
+        print(f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
     res = noc.save_many_scan_profile(
         [
             datamap["oois"][decl["source"]]["scan_profile"]
@@ -107,11 +109,11 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
         ]
     )
     if res is not None:
-        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
+        print(f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
     time.sleep(1)
     res = noc.scan_profiles_recalculate()
     if res is not None:
-        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
+        print(f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
     objects = noc.objects()["items"]
     print(f"init: {len(objects)}")
     new_objects = objects
@@ -127,7 +129,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                 res = noc.save_observation(origin)
                 if res is not None:
                     print(
-                        f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                        f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
             for prototype in filter(
                 lambda origin: origin["source"] == obj["primary_key"],
@@ -137,12 +139,12 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                 res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
                 if res is not None:
                     print(
-                        f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                        f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
         res = noc.scan_profiles_recalculate()
         if res is not None:
             print(
-                f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
             )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
@@ -152,9 +154,9 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
     objects = noc.objects()["items"]
     pks = [obj["primary_key"] for obj in objects]
     if len(datamap["oois"]) == len(objects):
-        print(f"GOOOD {len(datamap["oois"])}")
+        print(f"SUCCES: {len(datamap["oois"])}")
     else:
-        print(f"bleet: {len(datamap["oois"])} != {len(objects)}")
+        print(f"FAIL: {len(datamap["oois"])} != {len(objects)}")
         if dump:
             for obj in datamap["oois"]:
                 if obj not in pks:
