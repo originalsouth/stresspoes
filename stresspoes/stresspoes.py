@@ -7,9 +7,9 @@ import time
 
 import click
 import zstandard as zstd
-from ascii_magic import AsciiArt
 from dill import dumps, loads
 from octopoes_client import OctopoesClient
+from term_image.image import from_file
 from xxhash import xxh3_128_hexdigest as xxh3
 
 
@@ -26,7 +26,8 @@ from xxhash import xxh3_128_hexdigest as xxh3
 @click.pass_context
 def cli(ctx: click.Context, url: str, org: str, silent: bool):
     if not silent:
-        click.echo(AsciiArt.from_image("stresspoes.jpg").to_ascii())
+        image = from_file("stresspoes.jpg")
+        image.draw()
         click.echo("Hello from stresspoes!")
     oc = OctopoesClient(url, org)
     ctx.ensure_object(dict)
@@ -39,30 +40,16 @@ def cli(ctx: click.Context, url: str, org: str, silent: bool):
 @click.pass_context
 def datamap(ctx: click.Context, filename: str):
     oc = ctx.obj["client"]
-    declarations_list = oc.load_bulk(
-        [
-            declarations["source"]
-            for declarations in oc.origins(origin_type="declaration")
-        ]
-    )
-    observation_mapping = {
-        origin["source"]: {
-            "origin": origin,
-            "result_oois": oc.load_bulk(origin["result"]),
-        }
-        for origin in oc.origins(origin_type="observation")
-        if origin["result"]
-    }
-    affirmations_list = {
-        affirmation["source"]: oc.object(affirmation["source"])
-        for affirmation in oc.origins(origin_type="affirmation")
-    }
+    oois = {obj["primary_key"]: obj for obj in oc.objects()["items"]}
+    affirmations = oc.origins(origin_type="affirmation")
+    declarations = oc.origins(origin_type="declaration")
+    observations = oc.origins(origin_type="observation")
     datamap = {
         "organisation": ctx.obj["organisation"],
-        "declarations_list": declarations_list,
-        "observations_mapping": observation_mapping,
-        "affirmations_list": affirmations_list,
-        "objects": oc.objects(),
+        "oois": oois,
+        "affirmations": affirmations,
+        "declarations": declarations,
+        "observations": observations,
     }
     with open(filename, "wb") as file:
         payload = dumps(datamap)
@@ -75,9 +62,16 @@ def datamap(ctx: click.Context, filename: str):
     help="Stress Octopoes (warning: this may destroy your OpenKAT installation)"
 )
 @click.option("-d", "--dump", is_flag=True, default=False, help="Dump opbjects diff")
+@click.option(
+    "-x",
+    "--xterminate",
+    is_flag=True,
+    default=True,
+    help="Delete resulting organisation",
+)
 @click.argument("filename", default="datamap.kat")
 @click.pass_context
-def stress(ctx: click.Context, filename: str, dump: bool):
+def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
     oc = ctx.obj["client"]
     with open(filename, "rb") as file:
         magic, datamap, checksum = loads(
@@ -101,50 +95,72 @@ def stress(ctx: click.Context, filename: str, dump: bool):
     else:
         organisation = oc.org
         noc = oc
-    noc.save_many_declarations(
-        [{"ooi": decl} for _, decl in datamap["declarations_list"].items()]
+    res = noc.save_many_declarations(
+        [{"ooi": datamap["oois"][decl["source"]]} for decl in datamap["declarations"]]
     )
+    if res is not None:
+        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
+    res = noc.save_many_scan_profile(
+        [
+            datamap["oois"][decl["source"]]["scan_profile"]
+            for decl in datamap["declarations"]
+        ]
+    )
+    if res is not None:
+        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
     time.sleep(1)
+    res = noc.scan_profiles_recalculate()
+    if res is not None:
+        print(f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}")
     objects = noc.objects()["items"]
     print(f"init: {len(objects)}")
     new_objects = objects
     counter = 0
-    omp = datamap["observations_mapping"]
-    amp = datamap["affirmations_list"]
-    while new_objects or counter < 0xFF:
-        if not new_objects:
-            new_objects = objects
+    while new_objects or counter < 0xF:
         for obj in new_objects:
-            if obj["primary_key"] in omp:
-                origin = omp[obj["primary_key"]]["origin"]
-                origin["result"] = list(omp[obj["primary_key"]]["result_oois"].values())
+            for prototype in filter(
+                lambda origin: origin["source"] == obj["primary_key"],
+                datamap["observations"],
+            ):
+                origin = prototype.copy()
+                origin["result"] = [datamap["oois"][pk] for pk in origin["result"]]
                 res = noc.save_observation(origin)
                 if res is not None:
                     print(
                         f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
-            if obj["primary_key"] in amp:
-                res = noc.save_affirmations({"ooi": amp[obj["primary_key"]]})
+            for prototype in filter(
+                lambda origin: origin["source"] == obj["primary_key"],
+                datamap["affirmations"],
+            ):
+                origin = prototype.copy()
+                res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
                 if res is not None:
-                    print(json.dumps(amp[obj["primary_key"]], indent=2))
                     print(
                         f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
-        # noc.bits_recalculate()
+        res = noc.scan_profiles_recalculate()
+        if res is not None:
+            print(
+                f"fail({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+            )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
-        objects = newer_objects
+        objects = newer_objects.copy()
         print(f"{counter}: {len(objects)}")
         counter += 1
-    if len(datamap["objects"]["items"]) == len(objects):
-        print(f"GOOOD {len(datamap["objects"]["items"])}")
-        noc.node_delete(organisation)
+    objects = noc.objects()["items"]
+    pks = [obj["primary_key"] for obj in objects]
+    if len(datamap["oois"]) == len(objects):
+        print(f"GOOOD {len(datamap["oois"])}")
     else:
-        print(f"bleet: {len(datamap["objects"]["items"])} != {len(objects)}")
+        print(f"bleet: {len(datamap["oois"])} != {len(objects)}")
         if dump:
-            for obj in datamap["objects"]["items"]:
-                if obj not in objects:
-                    print(obj["primary_key"])
+            for obj in datamap["oois"]:
+                if obj not in pks:
+                    print(obj)
+    if xterminate:
+        noc.node_delete(organisation)
 
 
 if __name__ == "__main__":

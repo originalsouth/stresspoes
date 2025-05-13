@@ -371,3 +371,34 @@ class OctopoesClient:
         res = self._client.post("bits/recalculate")
 
         return res.json()
+
+    def save_scan_profile(
+        self, scan_profile: dict[str, Any], valid_time: datetime.datetime | None = None
+    ) -> JsonValue:
+        params = {"valid_time": self._gettime(valid_time)}
+
+        res = self._client.put("/scan_profiles", params=params, json=scan_profile)
+
+        return res.json()
+
+    def save_many_scan_profile(
+        self,
+        scan_profile: list[dict[str, Any]],
+        valid_time: datetime.datetime | None = None,
+    ) -> JsonValue:
+        params = {"valid_time": self._gettime(valid_time)}
+
+        res = self._client.post(
+            "/scan_profiles/save_many", params=params, json=scan_profile
+        )
+
+        return res.json()
+
+    def scan_profiles_recalculate(
+        self, valid_time: datetime.datetime | None = None
+    ) -> JsonValue:
+        params = {"valid_time": self._gettime(valid_time)}
+
+        res = self._client.get("/scan_profiles/recalculate", params=params)
+
+        return res.json()
