@@ -118,7 +118,11 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
     print(f"init: {len(objects)}")
     new_objects = objects
     counter = 0
+    times = []
+    operations = []
     while new_objects or counter < 0xF:
+        ops = 1
+        begin = time.perf_counter_ns()
         for obj in new_objects:
             for prototype in filter(
                 lambda origin: origin["source"] == obj["primary_key"],
@@ -131,6 +135,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                     print(
                         f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
+                ops += 1
             for prototype in filter(
                 lambda origin: origin["source"] == obj["primary_key"],
                 datamap["affirmations"],
@@ -141,6 +146,10 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                     print(
                         f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
+                ops += 1
+        timediff = (time.perf_counter_ns() - begin) / 10e9
+        times.append(timediff)
+        operations.append(ops)
         res = noc.scan_profiles_recalculate()
         if res is not None:
             print(
@@ -149,18 +158,29 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
         objects = newer_objects.copy()
-        print(f"{counter}: {len(objects)}")
+        print(f"{counter}: {len(objects)} ({ops}: {timediff}s)")
         counter += 1
     objects = noc.objects()["items"]
     pks = [obj["primary_key"] for obj in objects]
     if len(datamap["oois"]) == len(objects):
-        print(f"SUCCES: {len(datamap["oois"])}")
+        print(f"SUCCES: {len(datamap["oois"])} in ({sum(operations)}: {sum(times)})s")
     else:
-        print(f"FAIL: {len(datamap["oois"])} != {len(objects)}")
+        print(f"FAIL: {len(datamap["oois"])} ({datamap["organisation"]}) != {len(objects)} ({organisation}) in ({sum(operations)}: {sum(times)}s)")
         if dump:
+            counter = 0
             for obj in datamap["oois"]:
                 if obj not in pks:
-                    print(obj)
+                    print(f"--> {obj}")
+                    counter += 1
+            if counter > 0:
+                print(f"diff: {counter}")
+            counter = 0
+            for obj in pks:
+                if obj not in datamap["oois"]:
+                    print(f"<-- {obj}")
+                    counter += 1
+            if counter > 0:
+                print(f"diff: {counter}")
     if xterminate:
         noc.node_delete(organisation)
 
