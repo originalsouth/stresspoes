@@ -3,7 +3,11 @@
 import inspect
 import json
 import random
+import re
 import time
+from copy import deepcopy
+from functools import reduce
+from typing import Any
 
 import click
 import zstandard as zstd
@@ -13,6 +17,29 @@ from term_image.image import from_file
 from xxhash import xxh3_128_hexdigest as xxh3
 
 MAGIC = 0xC0DECA7
+
+
+def merge_dicts(d1: dict[str, Any], d2: dict[str, Any]) -> dict[str, Any]:
+    return {
+        key: {**value, **d2[key]} if isinstance(value, dict) else value + d2[key]
+        for key, value in d1.items()
+    }
+
+
+def seek(d: dict[str, Any], key: str, regex: str) -> str | None:
+    if key in d and isinstance(d[key], str):
+        if re.search(regex, d[key]):
+            return d[key]
+    for v in d.values():
+        if isinstance(v, dict):
+            retval = seek(v, key, regex)
+            if retval is not None:
+                return retval
+    return None
+
+
+def replace(d: dict[str, Any], source: str, target: str) -> dict[str, Any]:
+    return json.loads(json.dumps(d).replace(source, target))
 
 
 @click.group(
@@ -60,20 +87,44 @@ def datamap(ctx: click.Context, filename: str):
         )
 
 
+@cli.command(help="Dump Datamap")
+@click.argument("filename", default="datamap.kat")
+@click.pass_context
+def dump(ctx: click.Context, filename: str):
+    with open(filename, "rb") as file:
+        magic, datamap, checksum = loads(
+            zstd.ZstdDecompressor().decompress(file.read())
+        )
+    if magic != MAGIC or checksum != xxh3(datamap):
+        click.echo(f"Datamap file {filename} seems corrupted.")
+        return
+    else:
+        datamap = loads(datamap)
+    click.echo(json.dumps(datamap, indent=2))
+
+
 @cli.command(
     help="Stress Octopoes (warning: this may destroy your OpenKAT installation)"
 )
 @click.option("-d", "--dump", is_flag=True, default=False, help="Dump opbjects diff")
 @click.option(
     "-x",
-    "--xterminate",
+    "--noxterminate",
     is_flag=True,
     default=True,
     help="Delete resulting organisation",
 )
+@click.option(
+    "-m",
+    "--multiplier",
+    default=1,
+    help="Multiply base objects by a value",
+)
 @click.argument("filename", default="datamap.kat")
 @click.pass_context
-def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
+def stress(
+    ctx: click.Context, filename: str, dump: bool, noxterminate: bool, multiplier: int
+):
     oc = ctx.obj["client"]
     with open(filename, "rb") as file:
         magic, datamap, checksum = loads(
@@ -97,6 +148,15 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
     else:
         organisation = oc.org
         noc = oc
+    if multiplier > 1:
+        target = seek(datamap, "primary_key", r"^Network\|[^|]+$")
+        if target is not None:
+            target = target.split("|")[-1]
+            enriched = [
+                replace(deepcopy(datamap), target, f"{target}-{i}")
+                for i in range(multiplier)
+            ]
+            datamap = merge_dicts(datamap, reduce(merge_dicts, enriched))
     res = noc.save_many_declarations(
         [{"ooi": datamap["oois"][decl["source"]]} for decl in datamap["declarations"]]
     )
@@ -128,7 +188,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                 lambda origin: origin["source"] == obj["primary_key"],
                 datamap["observations"],
             ):
-                origin = prototype.copy()
+                origin = deepcopy(prototype)
                 origin["result"] = [datamap["oois"][pk] for pk in origin["result"]]
                 res = noc.save_observation(origin)
                 if res is not None:
@@ -140,7 +200,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                 lambda origin: origin["source"] == obj["primary_key"],
                 datamap["affirmations"],
             ):
-                origin = prototype.copy()
+                origin = deepcopy(prototype)
                 res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
                 if res is not None:
                     print(
@@ -157,15 +217,19 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
             )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
-        objects = newer_objects.copy()
+        objects = deepcopy(newer_objects)
         print(f"{counter}: {len(objects)} ({ops}: {timediff}s)")
         counter += 1
     objects = noc.objects()["items"]
     pks = [obj["primary_key"] for obj in objects]
-    if len(datamap["oois"]) == len(objects):
+    if len(datamap["oois"]) == len(objects) and all(
+        ref in pks for ref in datamap["oois"]
+    ):
         print(f"SUCCES: {len(datamap["oois"])} in ({sum(operations)}: {sum(times)})s")
     else:
-        print(f"FAIL: {len(datamap["oois"])} ({datamap["organisation"]}) != {len(objects)} ({organisation}) in ({sum(operations)}: {sum(times)}s)")
+        print(
+            f"FAIL: {len(datamap["oois"])} ({datamap["organisation"]}) != {len(objects)} ({organisation}) in ({sum(operations)}: {sum(times)}s)"
+        )
         if dump:
             counter = 0
             for obj in datamap["oois"]:
@@ -181,7 +245,7 @@ def stress(ctx: click.Context, filename: str, dump: bool, xterminate: bool):
                     counter += 1
             if counter > 0:
                 print(f"diff: {counter}")
-    if xterminate:
+    if noxterminate:
         noc.node_delete(organisation)
 
 
