@@ -120,10 +120,18 @@ def dump(ctx: click.Context, filename: str):
     default=1,
     help="Multiply base objects by a value",
 )
+@click.option("-t", "--threshold", default=0xF, help="Number of rounds after nulling")
+@click.option("-o", "--timeout", default=0.0, help="Relax the round")
 @click.argument("filename", default="datamap.kat")
 @click.pass_context
 def stress(
-    ctx: click.Context, filename: str, dump: bool, noxterminate: bool, multiplier: int
+    ctx: click.Context,
+    filename: str,
+    dump: bool,
+    noxterminate: bool,
+    multiplier: int,
+    threshold: int,
+    timeout: float,
 ):
     oc = ctx.obj["client"]
     with open(filename, "rb") as file:
@@ -154,9 +162,11 @@ def stress(
             target = target.split("|")[-1]
             enriched = [
                 replace(deepcopy(datamap), target, f"{target}-{i}")
-                for i in range(multiplier)
+                for i in range(multiplier - 1)
             ]
             datamap = merge_dicts(datamap, reduce(merge_dicts, enriched))
+            datamap["organisation"] = oc.org
+    print(f"declarations: {len(datamap["declarations"])}")
     res = noc.save_many_declarations(
         [{"ooi": datamap["oois"][decl["source"]]} for decl in datamap["declarations"]]
     )
@@ -180,7 +190,7 @@ def stress(
     counter = 0
     times = []
     operations = []
-    while new_objects or counter < 0xF:
+    while new_objects or counter < threshold:
         ops = 1
         begin = time.perf_counter_ns()
         for obj in new_objects:
@@ -219,6 +229,7 @@ def stress(
         new_objects = [obj for obj in newer_objects if obj not in objects]
         objects = deepcopy(newer_objects)
         print(f"{counter}: {len(objects)} ({ops}: {timediff}s)")
+        time.sleep(timeout)
         counter += 1
     objects = noc.objects()["items"]
     pks = [obj["primary_key"] for obj in objects]
