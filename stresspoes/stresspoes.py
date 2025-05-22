@@ -188,9 +188,10 @@ def stress(
     print(f"init: {len(objects)}")
     new_objects = objects
     counter = 0
+    relaxer = 0
     times = []
     operations = []
-    while new_objects or counter < threshold:
+    while new_objects or relaxer < threshold:
         ops = 1
         begin = time.perf_counter_ns()
         for obj in new_objects:
@@ -227,6 +228,10 @@ def stress(
             )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
+        if len(new_objects) == 0:
+            relaxer += 1
+        else:
+            relaxer = 0
         objects = deepcopy(newer_objects)
         print(f"{counter}: {len(objects)} ({ops}: {timediff}s)")
         time.sleep(timeout)
