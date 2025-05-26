@@ -15,6 +15,7 @@ from dill import dumps, loads
 from octopoes_client import OctopoesClient
 from term_image.image import from_file
 from xxhash import xxh3_128_hexdigest as xxh3
+from rabbitmq_size import get_event_count
 
 MAGIC = 0xC0DECA7
 
@@ -189,9 +190,10 @@ def stress(
     new_objects = objects
     counter = 0
     relaxer = 0
+    events = 1
     times = []
     operations = []
-    while new_objects or relaxer < threshold:
+    while new_objects or relaxer < threshold or events > 0:
         ops = 1
         begin = time.perf_counter_ns()
         for obj in new_objects:
@@ -221,11 +223,12 @@ def stress(
         timediff = (time.perf_counter_ns() - begin) / 10e9
         times.append(timediff)
         operations.append(ops)
-        res = noc.scan_profiles_recalculate()
-        if res is not None:
-            print(
-                f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
-            )
+        if counter % 10 == 0:
+            res = noc.scan_profiles_recalculate()
+            if res is not None:
+                print(
+                    f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
         if len(new_objects) == 0:
@@ -233,7 +236,8 @@ def stress(
         else:
             relaxer = 0
         objects = deepcopy(newer_objects)
-        print(f"{counter}: {len(objects)} ({ops}: {timediff}s)")
+        events = get_event_count()
+        print(f"{counter}: {len(objects)} ({ops}/{events}: {timediff}s)")
         time.sleep(timeout)
         counter += 1
     objects = noc.objects()["items"]
