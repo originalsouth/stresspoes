@@ -223,12 +223,11 @@ def stress(
         timediff = (time.perf_counter_ns() - begin) / 10e9
         times.append(timediff)
         operations.append(ops)
-        if counter % 10 == 0:
-            res = noc.scan_profiles_recalculate()
-            if res is not None:
-                print(
-                    f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
-                )
+        res = noc.scan_profiles_recalculate()
+        if res is not None:
+            print(
+                f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+            )
         newer_objects = noc.objects()["items"]
         new_objects = [obj for obj in newer_objects if obj not in objects]
         if len(new_objects) == 0:
