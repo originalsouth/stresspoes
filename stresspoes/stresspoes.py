@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import base64
 import inspect
 import json
 import random
@@ -10,14 +11,38 @@ from functools import reduce
 from typing import Any
 
 import click
+import httpx
 import zstandard as zstd
 from dill import dumps, loads
 from octopoes_client import OctopoesClient
 from term_image.image import from_file
 from xxhash import xxh3_128_hexdigest as xxh3
-from rabbitmq_size import get_event_count
 
 MAGIC = 0xC0DECA7
+
+
+def get_queue_info() -> dict[str, Any]:
+    # Yeah yeah they are hard coded
+    username = "0b89a58aafec2c9af020595581c3be3e6191848d9008d3fb88"
+    password = "4ffacd37fa833950a7712d22741a46d28fd67b470f53a32c4c"
+    vhost = "kat"
+    queue_name = "octopoes"
+    auth_string = f"{username}:{password}"
+    auth_bytes = auth_string.encode('ascii')
+    base64_bytes = base64.b64encode(auth_bytes)
+    base64_auth = base64_bytes.decode('ascii')
+    headers = {'Authorization': f'Basic {base64_auth}'}
+    url = f"http://localhost:15672/api/queues/{vhost}/{queue_name}"
+    try:
+        with httpx.Client() as client:
+            response = client.get(url, headers=headers)
+        if response.status_code == 200:
+            queue_info = response.json()
+            return queue_info
+        else:
+            return {}
+    except Exception:
+        return {}
 
 
 def merge_dicts(d1: dict[str, Any], d2: dict[str, Any]) -> dict[str, Any]:
@@ -235,7 +260,7 @@ def stress(
         else:
             relaxer = 0
         objects = deepcopy(newer_objects)
-        events = get_event_count()
+        events = get_queue_info()["messages"]
         print(f"{counter}: {len(objects)} ({ops}/{events}: {timediff}s)")
         time.sleep(timeout)
         counter += 1
