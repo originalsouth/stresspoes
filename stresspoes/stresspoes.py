@@ -28,10 +28,10 @@ def get_queue_info() -> dict[str, Any]:
     vhost = "kat"
     queue_name = "octopoes"
     auth_string = f"{username}:{password}"
-    auth_bytes = auth_string.encode('ascii')
+    auth_bytes = auth_string.encode("ascii")
     base64_bytes = base64.b64encode(auth_bytes)
-    base64_auth = base64_bytes.decode('ascii')
-    headers = {'Authorization': f'Basic {base64_auth}'}
+    base64_auth = base64_bytes.decode("ascii")
+    headers = {"Authorization": f"Basic {base64_auth}"}
     url = f"http://localhost:15672/api/queues/{vhost}/{queue_name}"
     try:
         with httpx.Client() as client:
@@ -289,6 +289,12 @@ def stress(
                     counter += 1
             if counter > 0:
                 print(f"diff: {counter}")
+    print(f"affirmation: {len(noc.origins(origin_type="affirmation"))}")
+    print(f"declaration: {len(noc.origins(origin_type="declaration"))}")
+    print(f"observation: {len(noc.origins(origin_type="observation"))}")
+    print(f"inference: {len(noc.origins(origin_type="inference"))}")
+    print(f"nibblet: {len(noc.origins(origin_type="nibblet"))}")
+    print(f"origins: {len(noc.origins())}")
     if noxterminate:
         noc.node_delete(organisation)
 
