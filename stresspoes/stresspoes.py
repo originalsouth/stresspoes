@@ -289,11 +289,11 @@ def stress(
                     counter += 1
             if counter > 0:
                 print(f"diff: {counter}")
-    print(f"affirmation: {len(noc.origins(origin_type="affirmation"))}")
-    print(f"declaration: {len(noc.origins(origin_type="declaration"))}")
-    print(f"observation: {len(noc.origins(origin_type="observation"))}")
-    print(f"inference: {len(noc.origins(origin_type="inference"))}")
-    print(f"nibblet: {len(noc.origins(origin_type="nibblet"))}")
+    print(f"affirmations: {len(noc.origins(origin_type="affirmation"))}")
+    print(f"declarations: {len(noc.origins(origin_type="declaration"))}")
+    print(f"observations: {len(noc.origins(origin_type="observation"))}")
+    print(f"inferences: {len(noc.origins(origin_type="inference"))}")
+    print(f"nibblets: {len(noc.origins(origin_type="nibblet"))}")
     print(f"origins: {len(noc.origins())}")
     if noxterminate:
         noc.node_delete(organisation)
