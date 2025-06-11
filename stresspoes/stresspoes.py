@@ -23,8 +23,8 @@ MAGIC = 0xC0DECA7
 
 def get_queue_info() -> dict[str, Any]:
     # Yeah yeah they are hard coded
-    username = "0b89a58aafec2c9af020595581c3be3e6191848d9008d3fb88"
-    password = "4ffacd37fa833950a7712d22741a46d28fd67b470f53a32c4c"
+    username = "c9d88b19f88be9f73a1b82466739c326e95bcd1fdc585e550c"
+    password = "6a0af4576a947a4e0baa0d6e70eb045f9251167653b63ae797"
     vhost = "kat"
     queue_name = "octopoes"
     auth_string = f"{username}:{password}"
