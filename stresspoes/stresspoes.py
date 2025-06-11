@@ -260,7 +260,7 @@ def stress(
         else:
             relaxer = 0
         objects = deepcopy(newer_objects)
-        events = get_queue_info()["messages"]
+        events = get_queue_info().get("messages", -1)
         print(f"{counter}: {len(objects)} ({ops}/{events}: {timediff}s)")
         time.sleep(timeout)
         counter += 1
