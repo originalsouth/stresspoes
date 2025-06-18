@@ -146,6 +146,13 @@ def dump(ctx: click.Context, filename: str):
     default=1,
     help="Multiply base objects by a value",
 )
+@click.option(
+    "-a",
+    "--noaffirm",
+    is_flag=True,
+    default=True,
+    help="Also affirm OOIs",
+)
 @click.option("-t", "--threshold", default=0xF, help="Number of rounds after nulling")
 @click.option("-o", "--timeout", default=0.0, help="Relax the round")
 @click.argument("filename", default="datamap.kat")
@@ -156,6 +163,7 @@ def stress(
     dump: bool,
     noxterminate: bool,
     multiplier: int,
+    noaffirm: bool,
     threshold: int,
     timeout: float,
 ):
@@ -234,17 +242,18 @@ def stress(
                         f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
                     )
                 ops += 1
-            for prototype in filter(
-                lambda origin: origin["source"] == obj["primary_key"],
-                datamap["affirmations"],
-            ):
-                origin = deepcopy(prototype)
-                res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
-                if res is not None:
-                    print(
-                        f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
-                    )
-                ops += 1
+            if not noaffirm:
+                for prototype in filter(
+                    lambda origin: origin["source"] == obj["primary_key"],
+                    datamap["affirmations"],
+                ):
+                    origin = deepcopy(prototype)
+                    res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
+                    if res is not None:
+                        print(
+                            f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
+                        )
+                    ops += 1
         timediff = (time.perf_counter_ns() - begin) / 10e9
         times.append(timediff)
         operations.append(ops)
@@ -289,9 +298,9 @@ def stress(
                     counter += 1
             if counter > 0:
                 print(f"diff: {counter}")
-    print(f"affirmations: {len(noc.origins(origin_type="affirmation"))}")
-    print(f"declarations: {len(noc.origins(origin_type="declaration"))}")
-    print(f"observations: {len(noc.origins(origin_type="observation"))}")
+    print(f"affirmations: {len(noc.origins(origin_type="affirmation"))}/{len(datamap["affirmations"])}")
+    print(f"declarations: {len(noc.origins(origin_type="declaration"))}/{len(datamap["declarations"])}")
+    print(f"observations: {len(noc.origins(origin_type="observation"))}/{len(datamap["observations"])}")
     print(f"inferences: {len(noc.origins(origin_type="inference"))}")
     print(f"nibblets: {len(noc.origins(origin_type="nibblet"))}")
     print(f"origins: {len(noc.origins())}")
