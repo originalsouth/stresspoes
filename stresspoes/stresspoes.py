@@ -248,7 +248,9 @@ def stress(
                     datamap["affirmations"],
                 ):
                     origin = deepcopy(prototype)
-                    res = noc.save_affirmations({"ooi": datamap["oois"][origin["source"]]})
+                    res = noc.save_affirmations(
+                        {"ooi": datamap["oois"][origin["source"]]}
+                    )
                     if res is not None:
                         print(
                             f"FAIL({inspect.currentframe().f_lineno}): {json.dumps(res, indent=2)}"
@@ -298,9 +300,15 @@ def stress(
                     counter += 1
             if counter > 0:
                 print(f"diff: {counter}")
-    print(f"affirmations: {len(noc.origins(origin_type="affirmation"))}/{len(datamap["affirmations"])}")
-    print(f"declarations: {len(noc.origins(origin_type="declaration"))}/{len(datamap["declarations"])}")
-    print(f"observations: {len(noc.origins(origin_type="observation"))}/{len(datamap["observations"])}")
+    print(
+        f"affirmations: {len(noc.origins(origin_type="affirmation"))}/{len(datamap["affirmations"])}"
+    )
+    print(
+        f"declarations: {len(noc.origins(origin_type="declaration"))}/{len(datamap["declarations"])}"
+    )
+    print(
+        f"observations: {len(noc.origins(origin_type="observation"))}/{len(datamap["observations"])}"
+    )
     print(f"inferences: {len(noc.origins(origin_type="inference"))}")
     print(f"nibblets: {len(noc.origins(origin_type="nibblet"))}")
     print(f"origins: {len(noc.origins())}")
